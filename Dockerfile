@@ -4,7 +4,7 @@ RUN addgroup --system --gid 1000 appuser && \
     adduser --system --uid 1000 --ingroup appuser appuser
 
 WORKDIR /app
-COPY --chown=appuser:appuser app.py .
+COPY --chown=appuser:appuser . .
 
 USER appuser
 
