@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from src.cache import seats_cache
 from src.database import get_db, init_db
-from src.models import Event
+from src.models import Event, Ticket
 from src.provider_client import EventsProviderClient
 
 
@@ -54,6 +54,22 @@ class EventListResponse(BaseModel):
 class SeatsResponse(BaseModel):
     event_id: str
     available_seats: list[str]
+
+
+class RegisterRequest(BaseModel):
+    event_id: str
+    first_name: str
+    last_name: str
+    email: str
+    seat: str
+
+
+class TicketResponse(BaseModel):
+    ticket_id: str
+
+
+class CancelResponse(BaseModel):
+    success: bool
 
 
 @app.get("/api/health")
@@ -165,3 +181,58 @@ async def get_event(event_id: str, db: Session = Depends(get_db)):
         status=event.status,
         number_of_visitors=event.number_of_visitors,
     )
+
+
+@app.post("/api/tickets", status_code=201, response_model=TicketResponse)
+async def register_ticket(request: RegisterRequest, db: Session = Depends(get_db)):
+    if not all([request.first_name, request.last_name, request.email, request.seat]):
+        raise HTTPException(status_code=400, detail="All fields are required")
+
+    event = db.query(Event).filter(Event.id == request.event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if event.status != "published":
+        raise HTTPException(status_code=400, detail="Event is not published")
+
+    client = EventsProviderClient()
+    try:
+        ticket_id = await client.register(
+            event_id=request.event_id,
+            first_name=request.first_name,
+            last_name=request.last_name,
+            email=request.email,
+            seat=request.seat,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Registration failed: {str(e)}")
+
+    ticket = Ticket(ticket_id=ticket_id, event_id=request.event_id)
+    db.add(ticket)
+    db.commit()
+
+    seats_cache.delete(f"seats_{request.event_id}")
+
+    return TicketResponse(ticket_id=ticket_id)
+
+
+@app.delete("/api/tickets/{ticket_id}", response_model=CancelResponse)
+async def cancel_ticket(ticket_id: str, db: Session = Depends(get_db)):
+    ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    client = EventsProviderClient()
+    try:
+        success = await client.unregister(
+            event_id=str(ticket.event_id), ticket_id=ticket_id
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Cancellation failed: {str(e)}")
+
+    db.delete(ticket)
+    db.commit()
+
+    seats_cache.delete(f"seats_{ticket.event_id}")
+
+    return CancelResponse(success=success)
