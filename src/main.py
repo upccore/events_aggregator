@@ -3,6 +3,8 @@ import logging
 from datetime import datetime
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
+from fastapi.routing import APIRoute
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -14,7 +16,27 @@ from src.provider_client import EventsProviderClient
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
+class CustomRoute(APIRoute):
+    def get_route_handler(self):
+        original_route_handler = super().get_route_handler()
+
+        async def custom_route_handler(request: Request):
+            try:
+                return await original_route_handler(request)
+            except HTTPException:
+                raise
+            except Exception:
+                return JSONResponse(
+                    status_code=400,
+                    content={"detail": "Invalid request body"},
+                )
+
+        return custom_route_handler
+
+
 app = FastAPI(title="Events Aggregator")
+app.router.route_class = CustomRoute
 
 _initialized = False
 _init_lock = asyncio.Lock()
@@ -78,20 +100,20 @@ class SeatsResponse(BaseModel):
     available_seats: list[str]
 
 
-class TicketResponse(BaseModel):
-    ticket_id: str
-
-
-class CancelResponse(BaseModel):
-    success: bool
-
-
 class RegisterRequest(BaseModel):
     event_id: str
     first_name: str
     last_name: str
     email: str
     seat: str
+
+
+class TicketResponse(BaseModel):
+    ticket_id: str
+
+
+class CancelResponse(BaseModel):
+    success: bool
 
 
 @app.get("/api/health")
@@ -214,14 +236,8 @@ async def get_seats(event_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/tickets", status_code=201)
-async def register_ticket(request: Request, db: Session = Depends(get_db)):
+async def register_ticket(req: RegisterRequest, db: Session = Depends(get_db)):
     await ensure_initialized()
-
-    try:
-        body = await request.json()
-        req = RegisterRequest(**body)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid request body")
 
     if not req.event_id:
         raise HTTPException(status_code=400, detail="event_id is required")
