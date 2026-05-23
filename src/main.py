@@ -1,8 +1,9 @@
 import asyncio
+import json
 import logging
 from datetime import datetime
 
-from fastapi import Body, Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -206,12 +207,24 @@ async def get_seats(event_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/tickets", status_code=201)
-async def register_ticket(
-    body: dict | None = Body(default=None), db: Session = Depends(get_db)
-):
+async def register_ticket(request: Request, db: Session = Depends(get_db)):
     await ensure_initialized()
 
-    if body is None:
+    # Читаем сырое тело
+    body_bytes = await request.body()
+
+    # Если тело пустое - сразу 400
+    if not body_bytes:
+        raise HTTPException(status_code=400, detail="Invalid request body")
+
+    # Пробуем распарсить JSON
+    try:
+        body = json.loads(body_bytes)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        raise HTTPException(status_code=400, detail="Invalid request body")
+
+    # Если распарсился не в dict - 400
+    if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Invalid request body")
 
     event_id = body.get("event_id", "")
