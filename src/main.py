@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 from datetime import datetime
 
@@ -85,6 +84,14 @@ class TicketResponse(BaseModel):
 
 class CancelResponse(BaseModel):
     success: bool
+
+
+class RegisterRequest(BaseModel):
+    event_id: str
+    first_name: str
+    last_name: str
+    email: str
+    seat: str
 
 
 @app.get("/api/health")
@@ -210,38 +217,24 @@ async def get_seats(event_id: str, db: Session = Depends(get_db)):
 async def register_ticket(request: Request, db: Session = Depends(get_db)):
     await ensure_initialized()
 
-    # Читаем сырое тело
-    body_bytes = await request.body()
-
-    if not body_bytes:
-        raise HTTPException(status_code=400, detail="Invalid request body")
-
     try:
-        body = json.loads(body_bytes)
-    except (json.JSONDecodeError, UnicodeDecodeError):
+        body = await request.json()
+        req = RegisterRequest(**body)
+    except Exception:
         raise HTTPException(status_code=400, detail="Invalid request body")
 
-    if not isinstance(body, dict):
-        raise HTTPException(status_code=400, detail="Invalid request body")
-
-    event_id = body.get("event_id", "")
-    first_name = body.get("first_name", "")
-    last_name = body.get("last_name", "")
-    email = body.get("email", "")
-    seat = body.get("seat", "")
-
-    if not event_id:
+    if not req.event_id:
         raise HTTPException(status_code=400, detail="event_id is required")
-    if not first_name:
+    if not req.first_name:
         raise HTTPException(status_code=400, detail="first_name is required")
-    if not last_name:
+    if not req.last_name:
         raise HTTPException(status_code=400, detail="last_name is required")
-    if not email:
+    if not req.email:
         raise HTTPException(status_code=400, detail="email is required")
-    if not seat:
+    if not req.seat:
         raise HTTPException(status_code=400, detail="seat is required")
 
-    event = db.query(Event).filter(Event.id == event_id).first()
+    event = db.query(Event).filter(Event.id == req.event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
@@ -251,20 +244,20 @@ async def register_ticket(request: Request, db: Session = Depends(get_db)):
     client = EventsProviderClient()
     try:
         ticket_id = await client.register(
-            event_id=event_id,
-            first_name=first_name,
-            last_name=last_name,
-            email=email,
-            seat=seat,
+            event_id=req.event_id,
+            first_name=req.first_name,
+            last_name=req.last_name,
+            email=req.email,
+            seat=req.seat,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    ticket = Ticket(ticket_id=ticket_id, event_id=event_id)
+    ticket = Ticket(ticket_id=ticket_id, event_id=req.event_id)
     db.add(ticket)
     db.commit()
 
-    seats_cache.delete(f"seats_{event_id}")
+    seats_cache.delete(f"seats_{req.event_id}")
 
     return TicketResponse(ticket_id=ticket_id)
 
