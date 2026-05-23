@@ -29,6 +29,7 @@ class PlaceSchema(BaseModel):
     name: str
     city: str
     address: str
+    seats_pattern: str | None = None
 
 
 class EventSchema(BaseModel):
@@ -111,3 +112,26 @@ async def get_events(
     ]
 
     return EventListResponse(count=total, next=next_url, results=results)
+
+
+@app.get("/api/events/{event_id}", response_model=EventSchema)
+async def get_event(event_id: str, db: Session = Depends(get_db)):
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    return EventSchema(
+        id=str(event.id),
+        name=event.name,
+        place=PlaceSchema(
+            id=str(event.place_id),
+            name=event.place_name,
+            city=event.place_city,
+            address=event.place_address,
+            seats_pattern=event.place_seats_pattern,
+        ),
+        event_time=event.event_time,
+        registration_deadline=event.registration_deadline,
+        status=event.status,
+        number_of_visitors=event.number_of_visitors,
+    )
