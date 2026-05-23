@@ -2,8 +2,7 @@ import asyncio
 import logging
 from datetime import datetime
 
-from fastapi import Depends, FastAPI, HTTPException, Query
-from fastapi.exceptions import RequestValidationError
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -17,12 +16,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Events Aggregator")
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request, exc):
-    return JSONResponse(status_code=400, content={"detail": "Invalid request body"})
-
 
 _initialized = False
 _init_lock = asyncio.Lock()
@@ -84,14 +77,6 @@ class EventListResponse(BaseModel):
 class SeatsResponse(BaseModel):
     event_id: str
     available_seats: list[str]
-
-
-class RegisterRequest(BaseModel):
-    event_id: str
-    first_name: str
-    last_name: str
-    email: str
-    seat: str
 
 
 class TicketResponse(BaseModel):
@@ -222,22 +207,34 @@ async def get_seats(event_id: str, db: Session = Depends(get_db)):
 
 
 @app.post("/api/tickets", status_code=201, response_model=TicketResponse)
-async def register_ticket(request: RegisterRequest, db: Session = Depends(get_db)):
+async def register_ticket(request: Request, db: Session = Depends(get_db)):
     await ensure_initialized()
 
-    # Проверка на пустые поля
-    if (
-        not request.first_name
-        or not request.last_name
-        or not request.email
-        or not request.seat
-    ):
-        raise HTTPException(status_code=400, detail="All fields are required")
+    # Парсим тело запроса вручную
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid request body")
 
-    if not request.event_id:
+    # Валидируем поля
+    event_id = body.get("event_id", "")
+    first_name = body.get("first_name", "")
+    last_name = body.get("last_name", "")
+    email = body.get("email", "")
+    seat = body.get("seat", "")
+
+    if not event_id:
         raise HTTPException(status_code=400, detail="event_id is required")
+    if not first_name:
+        raise HTTPException(status_code=400, detail="first_name is required")
+    if not last_name:
+        raise HTTPException(status_code=400, detail="last_name is required")
+    if not email:
+        raise HTTPException(status_code=400, detail="email is required")
+    if not seat:
+        raise HTTPException(status_code=400, detail="seat is required")
 
-    event = db.query(Event).filter(Event.id == request.event_id).first()
+    event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
@@ -247,20 +244,20 @@ async def register_ticket(request: RegisterRequest, db: Session = Depends(get_db
     client = EventsProviderClient()
     try:
         ticket_id = await client.register(
-            event_id=request.event_id,
-            first_name=request.first_name,
-            last_name=request.last_name,
-            email=request.email,
-            seat=request.seat,
+            event_id=event_id,
+            first_name=first_name,
+            last_name=last_name,
+            email=email,
+            seat=seat,
         )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    ticket = Ticket(ticket_id=ticket_id, event_id=request.event_id)
+    ticket = Ticket(ticket_id=ticket_id, event_id=event_id)
     db.add(ticket)
     db.commit()
 
-    seats_cache.delete(f"seats_{request.event_id}")
+    seats_cache.delete(f"seats_{event_id}")
 
     return TicketResponse(ticket_id=ticket_id)
 
