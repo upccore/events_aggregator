@@ -2,7 +2,7 @@ import asyncio
 import logging
 from datetime import datetime
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Body, Depends, FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -205,17 +205,15 @@ async def get_seats(event_id: str, db: Session = Depends(get_db)):
     return SeatsResponse(event_id=event_id, available_seats=seats)
 
 
-@app.post("/api/tickets", status_code=201, response_model=TicketResponse)
-async def register_ticket(request: Request, db: Session = Depends(get_db)):
+@app.post("/api/tickets", status_code=201)
+async def register_ticket(
+    body: dict | None = Body(default=None), db: Session = Depends(get_db)
+):
     await ensure_initialized()
 
-    # Парсим тело запроса вручную
-    try:
-        body = await request.json()
-    except Exception:
+    if body is None:
         raise HTTPException(status_code=400, detail="Invalid request body")
 
-    # Валидируем поля
     event_id = body.get("event_id", "")
     first_name = body.get("first_name", "")
     last_name = body.get("last_name", "")
