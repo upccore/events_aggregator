@@ -1,7 +1,8 @@
 import os
 from urllib.parse import quote_plus
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 POSTGRES_USERNAME = os.getenv("POSTGRES_USERNAME", "postgres")
 POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "postgres")
