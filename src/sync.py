@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import traceback
 from datetime import datetime, timezone
 
 from src.database import SessionLocal
@@ -28,6 +29,7 @@ async def sync_events(client=None):
             )
             db.add(sync_meta)
             db.commit()
+            logger.info("Created new sync metadata")
 
         sync_meta.sync_status = "running"
         sync_meta.last_sync_time = datetime.now(timezone.utc)
@@ -37,10 +39,14 @@ async def sync_events(client=None):
         if last_changed.tzinfo is None:
             last_changed = last_changed.replace(tzinfo=timezone.utc)
 
+        logger.info(f"Starting sync from {last_changed}")
+
         paginator = EventsPaginator(client)
         max_changed_at = last_changed
+        events_count = 0
 
         async for event_data in paginator:
+            events_count += 1
             changed_at = datetime.fromisoformat(event_data["changed_at"])
             if changed_at > max_changed_at:
                 max_changed_at = changed_at
@@ -88,15 +94,21 @@ async def sync_events(client=None):
                 )
                 db.add(event)
 
+            if events_count % 50 == 0:
+                db.commit()
+                logger.info(f"Synced {events_count} events so far...")
+
         if sync_meta:
             sync_meta.last_changed_at = max_changed_at
             sync_meta.sync_status = "completed"
-            db.commit()
+        db.commit()
 
-        logger.info(f"Sync completed. Events updated up to {max_changed_at}")
+        logger.info(
+            f"Sync completed. Total events: {events_count}, last changed: {max_changed_at}"
+        )
 
     except Exception as e:
-        logger.error(f"Sync failed: {e}")
+        logger.error(f"Sync failed: {e}\n{traceback.format_exc()}")
         if sync_meta:
             sync_meta.sync_status = "failed"
             db.commit()
@@ -106,16 +118,21 @@ async def sync_events(client=None):
 
 
 async def background_sync_worker():
-    client = EventsProviderClient()
+    logger.info("Background sync worker started")
 
-    try:
-        await sync_events(client)
-    except Exception as e:
-        logger.error(f"Initial sync failed: {e}")
+    for attempt in range(3):
+        try:
+            await sync_events()
+            logger.info("Initial sync completed successfully")
+            break
+        except Exception as e:
+            logger.error(f"Initial sync attempt {attempt + 1} failed: {e}")
+            if attempt < 2:
+                await asyncio.sleep(10)
 
     while True:
-        await asyncio.sleep(86400)
+        await asyncio.sleep(86400)  # 24 часа
         try:
-            await sync_events(client)
+            await sync_events()
         except Exception as e:
             logger.error(f"Periodic sync failed: {e}")
