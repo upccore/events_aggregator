@@ -213,17 +213,14 @@ async def register_ticket(request: Request, db: Session = Depends(get_db)):
     # Читаем сырое тело
     body_bytes = await request.body()
 
-    # Если тело пустое - сразу 400
     if not body_bytes:
         raise HTTPException(status_code=400, detail="Invalid request body")
 
-    # Пробуем распарсить JSON
     try:
         body = json.loads(body_bytes)
     except (json.JSONDecodeError, UnicodeDecodeError):
         raise HTTPException(status_code=400, detail="Invalid request body")
 
-    # Если распарсился не в dict - 400
     if not isinstance(body, dict):
         raise HTTPException(status_code=400, detail="Invalid request body")
 
