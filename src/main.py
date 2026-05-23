@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,7 +9,12 @@ from src.database import init_db
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+
+    from src.sync import background_sync_worker
+
+    task = asyncio.create_task(background_sync_worker())
     yield
+    task.cancel()
 
 
 app = FastAPI(title="Events Aggregator", lifespan=lifespan)
