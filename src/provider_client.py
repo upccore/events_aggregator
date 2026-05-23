@@ -62,8 +62,11 @@ class EventsProviderClient:
         url = f"{self.base_url}/api/events/{event_id}/unregister/"
 
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.delete(
-                url, json={"ticket_id": ticket_id}, headers={"x-api-key": self.api_key}
+            response = await client.request(
+                method="DELETE",
+                url=url,
+                json={"ticket_id": ticket_id},
+                headers={"x-api-key": self.api_key},
             )
             response.raise_for_status()
             return response.json()["success"]
