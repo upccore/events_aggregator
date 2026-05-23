@@ -6,8 +6,10 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from src.cache import seats_cache
 from src.database import get_db, init_db
 from src.models import Event
+from src.provider_client import EventsProviderClient
 
 
 @asynccontextmanager
@@ -49,6 +51,11 @@ class EventListResponse(BaseModel):
     results: list[EventSchema]
 
 
+class SeatsResponse(BaseModel):
+    event_id: str
+    available_seats: list[str]
+
+
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
@@ -60,6 +67,29 @@ async def trigger_sync():
 
     await sync_events()
     return {"message": "Sync completed successfully"}
+
+
+@app.get("/api/events/{event_id}/seats", response_model=SeatsResponse)
+async def get_seats(event_id: str, db: Session = Depends(get_db)):
+    cached = seats_cache.get(f"seats_{event_id}")
+    if cached:
+        return SeatsResponse(event_id=event_id, available_seats=cached)
+
+    event = db.query(Event).filter(Event.id == event_id).first()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if event.status != "published":
+        raise HTTPException(status_code=400, detail="Event is not published")
+
+    client = EventsProviderClient()
+    try:
+        seats = await client.get_seats(event_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get seats: {str(e)}")
+
+    seats_cache.set(f"seats_{event_id}", seats, ttl_seconds=30)
+    return SeatsResponse(event_id=event_id, available_seats=seats)
 
 
 @app.get("/api/events", response_model=EventListResponse)
