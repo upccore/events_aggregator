@@ -217,8 +217,17 @@ async def get_seats(event_id: str, db: Session = Depends(get_db)):
 async def register_ticket(request: RegisterRequest, db: Session = Depends(get_db)):
     await ensure_initialized()
 
-    if not all([request.first_name, request.last_name, request.email, request.seat]):
+    # Проверка на пустые поля
+    if (
+        not request.first_name
+        or not request.last_name
+        or not request.email
+        or not request.seat
+    ):
         raise HTTPException(status_code=400, detail="All fields are required")
+
+    if not request.event_id:
+        raise HTTPException(status_code=400, detail="event_id is required")
 
     event = db.query(Event).filter(Event.id == request.event_id).first()
     if not event:
@@ -228,13 +237,16 @@ async def register_ticket(request: RegisterRequest, db: Session = Depends(get_db
         raise HTTPException(status_code=400, detail="Event is not published")
 
     client = EventsProviderClient()
-    ticket_id = await client.register(
-        event_id=request.event_id,
-        first_name=request.first_name,
-        last_name=request.last_name,
-        email=request.email,
-        seat=request.seat,
-    )
+    try:
+        ticket_id = await client.register(
+            event_id=request.event_id,
+            first_name=request.first_name,
+            last_name=request.last_name,
+            email=request.email,
+            seat=request.seat,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
     ticket = Ticket(ticket_id=ticket_id, event_id=request.event_id)
     db.add(ticket)
