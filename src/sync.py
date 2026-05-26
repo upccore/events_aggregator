@@ -39,7 +39,7 @@ async def sync_events(client=None):
         if last_changed.tzinfo is None:
             last_changed = last_changed.replace(tzinfo=timezone.utc)
 
-        logger.info(f"Starting sync from {last_changed}")
+        logger.info("Starting sync from %s", last_changed)
 
         paginator = EventsPaginator(client)
         max_changed_at = last_changed
@@ -96,7 +96,7 @@ async def sync_events(client=None):
 
             if events_count % 50 == 0:
                 db.commit()
-                logger.info(f"Synced {events_count} events so far...")
+                logger.info("Synced %d events so far...", events_count)
 
         if sync_meta:
             sync_meta.last_changed_at = max_changed_at
@@ -104,11 +104,13 @@ async def sync_events(client=None):
         db.commit()
 
         logger.info(
-            f"Sync completed. Total events: {events_count}, last changed: {max_changed_at}"
+            "Sync completed. Total events: %d, last changed: %s",
+            events_count,
+            max_changed_at,
         )
 
     except Exception as e:
-        logger.error(f"Sync failed: {e}\n{traceback.format_exc()}")
+        logger.error("Sync failed: %s\n%s", e, traceback.format_exc())
         if sync_meta:
             sync_meta.sync_status = "failed"
             db.commit()
@@ -126,13 +128,13 @@ async def background_sync_worker():
             logger.info("Initial sync completed successfully")
             break
         except Exception as e:
-            logger.error(f"Initial sync attempt {attempt + 1} failed: {e}")
+            logger.error("Initial sync attempt %d failed: %s", attempt + 1, e)
             if attempt < 2:
                 await asyncio.sleep(10)
 
     while True:
-        await asyncio.sleep(86400)  # 24 часа
+        await asyncio.sleep(86400)
         try:
             await sync_events()
         except Exception as e:
-            logger.error(f"Periodic sync failed: {e}")
+            logger.error("Periodic sync failed: %s", e)

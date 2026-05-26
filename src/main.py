@@ -57,7 +57,7 @@ async def ensure_initialized():
             init_db()
             logger.info("Database initialized")
         except Exception as e:
-            logger.error(f"Database init failed: {e}")
+            logger.error("Database init failed: %s", e)
 
         try:
             from src.sync import background_sync_worker
@@ -65,7 +65,7 @@ async def ensure_initialized():
             asyncio.create_task(background_sync_worker())
             logger.info("Sync worker started")
         except Exception as e:
-            logger.error(f"Sync worker start failed: {e}")
+            logger.error("Sync worker start failed: %s", e)
 
         _initialized = True
 
@@ -130,7 +130,7 @@ async def trigger_sync():
         await sync_events()
         return {"message": "Sync completed successfully"}
     except Exception as e:
-        logger.error(f"Sync failed: {e}")
+        logger.error("Sync failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
