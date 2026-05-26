@@ -1,17 +1,17 @@
-import os
+import urllib.parse
 
 import httpx
 
-API_KEY = os.getenv("EVENTS_PROVIDER_API_KEY", "")
-BASE_URL = os.getenv(
-    "EVENTS_PROVIDER_URL",
-    "http://student-system-events-provider-web.student-system-events-provider.svc:8000",
-)
+from src.config import EVENTS_PROVIDER_API_KEY, EVENTS_PROVIDER_URL
 
 
 class EventsProviderClient:
-    def __init__(self, base_url: str = BASE_URL, api_key: str = API_KEY):
-        self.base_url = base_url.rstrip("/")
+    def __init__(
+        self,
+        base_url: str = EVENTS_PROVIDER_URL,
+        api_key: str = EVENTS_PROVIDER_API_KEY,
+    ):
+        self.base_url = base_url.rstrip("/") + "/"
         self.api_key = api_key
 
     async def get_events(self, changed_at: str, cursor: str | None = None) -> dict:
@@ -19,7 +19,7 @@ class EventsProviderClient:
             url = cursor
             params = None
         else:
-            url = f"{self.base_url}/api/events/"
+            url = urllib.parse.urljoin(self.base_url, "api/events/")
             params = {"changed_at": changed_at}
 
         async with httpx.AsyncClient(timeout=30) as client:
