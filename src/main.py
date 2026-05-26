@@ -254,7 +254,7 @@ async def register_ticket(req: RegisterRequest, db: Session = Depends(get_db)):
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if event.status != "published":
+    if event.status != EventStatus.PUBLISHED:
         raise HTTPException(status_code=400, detail="Event is not published")
 
     client = EventsProviderClient()
