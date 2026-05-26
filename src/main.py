@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from src.cache import seats_cache
 from src.database import get_db, init_db
+from src.enums import EventStatus
 from src.models import Event, Ticket
 from src.provider_client import EventsProviderClient
 from src.sync import background_sync_worker
@@ -224,7 +225,7 @@ async def get_seats(event_id: str, db: Session = Depends(get_db)):
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    if event.status != "published":
+    if event.status != EventStatus.PUBLISHED:
         raise HTTPException(status_code=400, detail="Event is not published")
 
     client = EventsProviderClient()

@@ -4,6 +4,7 @@ from sqlalchemy import Column, DateTime, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from src.database import Base
+from src.enums import SyncStatus
 
 
 class Event(Base):
@@ -34,7 +35,7 @@ class SyncMetadata(Base):
         default=lambda: datetime(2000, 1, 1, tzinfo=timezone.utc),
     )
     last_sync_time = Column(DateTime(timezone=True))
-    sync_status = Column(String, default="idle")
+    sync_status = Column(String, default=SyncStatus.IDLE)
 
 
 class Ticket(Base):

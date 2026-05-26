@@ -4,6 +4,7 @@ import traceback
 from datetime import datetime, timezone
 
 from src.database import SessionLocal
+from src.enums import SyncStatus
 from src.models import Event, SyncMetadata
 from src.paginator import EventsPaginator
 from src.provider_client import EventsProviderClient
@@ -31,7 +32,7 @@ async def sync_events(client=None):
             db.commit()
             logger.info("Created new sync metadata")
 
-        sync_meta.sync_status = "running"
+        sync_meta.sync_status = SyncStatus.RUNNING
         sync_meta.last_sync_time = datetime.now(timezone.utc)
         db.commit()
 
@@ -100,7 +101,7 @@ async def sync_events(client=None):
 
         if sync_meta:
             sync_meta.last_changed_at = max_changed_at
-            sync_meta.sync_status = "completed"
+            sync_meta.sync_status = SyncStatus.COMPLETED
         db.commit()
 
         logger.info(
@@ -112,7 +113,7 @@ async def sync_events(client=None):
     except Exception as e:
         logger.error("Sync failed: %s\n%s", e, traceback.format_exc())
         if sync_meta:
-            sync_meta.sync_status = "failed"
+            sync_meta.sync_status = SyncStatus.FAILED
             db.commit()
         raise
     finally:
