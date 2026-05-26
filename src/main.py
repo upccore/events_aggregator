@@ -9,9 +9,10 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from src.cache import seats_cache
-from src.database import get_db
+from src.database import get_db, init_db
 from src.models import Event, Ticket
 from src.provider_client import EventsProviderClient
+from src.sync import background_sync_worker
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -52,7 +53,6 @@ async def ensure_initialized():
             return
 
         try:
-            from src.database import init_db
 
             init_db()
             logger.info("Database initialized")
@@ -60,7 +60,6 @@ async def ensure_initialized():
             logger.error("Database init failed: %s", e)
 
         try:
-            from src.sync import background_sync_worker
 
             asyncio.create_task(background_sync_worker())
             logger.info("Sync worker started")
