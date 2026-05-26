@@ -30,7 +30,7 @@ class EventsProviderClient:
             return response.json()
 
     async def get_seats(self, event_id: str) -> list[str]:
-        url = f"{self.base_url}/api/events/{event_id}/seats/"
+        url = urllib.parse.urljoin(self.base_url, f"api/events/{event_id}/seats/")
 
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.get(url, headers={"x-api-key": self.api_key})
@@ -40,9 +40,9 @@ class EventsProviderClient:
             return response.json()["seats"]
 
     async def register(
-        self, event_id: str, first_name: str, last_name: str, email: str, seat: str
+            self, event_id: str, first_name: str, last_name: str, email: str, seat: str
     ) -> str:
-        url = f"{self.base_url}/api/events/{event_id}/register/"
+        url = urllib.parse.urljoin(self.base_url, f"api/events/{event_id}/register/")
 
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(
@@ -59,7 +59,7 @@ class EventsProviderClient:
             return response.json()["ticket_id"]
 
     async def unregister(self, event_id: str, ticket_id: str) -> bool:
-        url = f"{self.base_url}/api/events/{event_id}/unregister/"
+        url = urllib.parse.urljoin(self.base_url, f"api/events/{event_id}/unregister/")
 
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.request(
