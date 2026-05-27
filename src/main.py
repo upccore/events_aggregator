@@ -5,7 +5,7 @@ from datetime import datetime
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from src import services
@@ -83,6 +83,16 @@ class EventSchema(BaseModel):
     registration_deadline: datetime
     status: EventStatus
     number_of_visitors: int
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def coerce_status(cls, v: object) -> EventStatus:
+        if isinstance(v, EventStatus):
+            return v
+        try:
+            return EventStatus(v)
+        except ValueError:
+            return EventStatus.PUBLISHED
 
 
 class EventListResponse(BaseModel):
