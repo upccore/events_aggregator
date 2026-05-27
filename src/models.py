@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Enum as SAEnum, Integer, String
+from sqlalchemy import Column, DateTime, Enum, Integer, String
 from sqlalchemy.dialects.postgresql import UUID
 
 from src.database import Base
@@ -14,7 +14,9 @@ class Event(Base):
     name = Column(String, nullable=False)
     event_time = Column(DateTime(timezone=True), nullable=False)
     registration_deadline = Column(DateTime(timezone=True), nullable=False)
-    status = Column(SAEnum(EventStatus, native_enum=False, create_constraint=False), nullable=False)
+    status = Column(
+        Enum(EventStatus, native_enum=False, create_constraint=False), nullable=False
+    )
     number_of_visitors = Column(Integer, default=0)
     place_id = Column(UUID(as_uuid=True))
     place_name = Column(String)
@@ -35,7 +37,10 @@ class SyncMetadata(Base):
         default=lambda: datetime(2000, 1, 1, tzinfo=timezone.utc),
     )
     last_sync_time = Column(DateTime(timezone=True))
-    sync_status = Column(SAEnum(SyncStatus, native_enum=False, create_constraint=False), default=SyncStatus.IDLE)
+    sync_status = Column(
+        Enum(SyncStatus, native_enum=False, create_constraint=False),
+        default=SyncStatus.IDLE,
+    )
 
 
 class Ticket(Base):
