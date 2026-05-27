@@ -1,6 +1,4 @@
-import logging
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -8,8 +6,6 @@ from src.cache import seats_cache
 from src.enums import EventStatus
 from src.models import Event, Ticket
 from src.provider_client import EventsProviderClient
-
-logger = logging.getLogger(__name__)
 
 
 class NotFoundError(Exception):
@@ -22,7 +18,7 @@ class BusinessLogicError(Exception):
 
 def get_events_list(
     db: Session,
-    date_from_dt: Optional[datetime],
+    date_from_dt: datetime | None,
     page: int,
     page_size: int,
 ) -> tuple[int, list[Event]]:
