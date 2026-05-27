@@ -26,7 +26,7 @@ async def sync_events(client=None):
             sync_meta = SyncMetadata(
                 id="sync_state",
                 last_changed_at=datetime(2000, 1, 1, tzinfo=timezone.utc),
-                sync_status="idle",
+                sync_status=SyncStatus.IDLE,
             )
             db.add(sync_meta)
             db.commit()

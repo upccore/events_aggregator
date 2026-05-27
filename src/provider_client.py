@@ -40,7 +40,7 @@ class EventsProviderClient:
             return response.json()["seats"]
 
     async def register(
-            self, event_id: str, first_name: str, last_name: str, email: str, seat: str
+        self, event_id: str, first_name: str, last_name: str, email: str, seat: str
     ) -> str:
         url = urllib.parse.urljoin(self.base_url, f"api/events/{event_id}/register/")
 

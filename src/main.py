@@ -8,12 +8,11 @@ from fastapi.routing import APIRoute
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from src.cache import seats_cache
+from src import services
 from src.database import get_db, init_db
 from src.enums import EventStatus
-from src.models import Event, Ticket
-from src.provider_client import EventsProviderClient
-from src.sync import background_sync_worker
+from src.services import BusinessLogicError, NotFoundError
+from src.sync import background_sync_worker, sync_events
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -54,14 +53,12 @@ async def ensure_initialized():
             return
 
         try:
-
             init_db()
             logger.info("Database initialized")
         except Exception as e:
             logger.error("Database init failed: %s", e)
 
         try:
-
             asyncio.create_task(background_sync_worker())
             logger.info("Sync worker started")
         except Exception as e:
@@ -84,7 +81,7 @@ class EventSchema(BaseModel):
     place: PlaceSchema
     event_time: datetime
     registration_deadline: datetime
-    status: str
+    status: EventStatus
     number_of_visitors: int
 
 
@@ -124,8 +121,6 @@ async def health_check():
 @app.post("/api/sync/trigger")
 async def trigger_sync():
     await ensure_initialized()
-    from src.sync import sync_events
-
     try:
         await sync_events()
         return {"message": "Sync completed successfully"}
@@ -143,22 +138,14 @@ async def get_events(
 ):
     await ensure_initialized()
 
-    query = db.query(Event)
-
+    date_from_dt = None
     if date_from:
         try:
             date_from_dt = datetime.strptime(date_from, "%Y-%m-%d")
-            query = query.filter(Event.event_time >= date_from_dt)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format")
 
-    total = query.count()
-    events = (
-        query.order_by(Event.event_time)
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
-    )
+    total, events = services.get_events_list(db, date_from_dt, page, page_size)
 
     next_url = None
     if page * page_size < total:
@@ -192,8 +179,9 @@ async def get_events(
 async def get_event(event_id: str, db: Session = Depends(get_db)):
     await ensure_initialized()
 
-    event = db.query(Event).filter(Event.id == event_id).first()
-    if not event:
+    try:
+        event = services.get_event_by_id(db, event_id)
+    except NotFoundError:
         raise HTTPException(status_code=404, detail="Event not found")
 
     return EventSchema(
@@ -217,21 +205,13 @@ async def get_event(event_id: str, db: Session = Depends(get_db)):
 async def get_seats(event_id: str, db: Session = Depends(get_db)):
     await ensure_initialized()
 
-    cached = seats_cache.get(f"seats_{event_id}")
-    if cached:
-        return SeatsResponse(event_id=event_id, available_seats=cached)
-
-    event = db.query(Event).filter(Event.id == event_id).first()
-    if not event:
+    try:
+        seats = await services.get_event_seats(db, event_id)
+    except NotFoundError:
         raise HTTPException(status_code=404, detail="Event not found")
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
-    if event.status != EventStatus.PUBLISHED:
-        raise HTTPException(status_code=400, detail="Event is not published")
-
-    client = EventsProviderClient()
-    seats = await client.get_seats(event_id)
-
-    seats_cache.set(f"seats_{event_id}", seats, ttl_seconds=30)
     return SeatsResponse(event_id=event_id, available_seats=seats)
 
 
@@ -250,30 +230,21 @@ async def register_ticket(req: RegisterRequest, db: Session = Depends(get_db)):
     if not req.seat:
         raise HTTPException(status_code=400, detail="seat is required")
 
-    event = db.query(Event).filter(Event.id == req.event_id).first()
-    if not event:
-        raise HTTPException(status_code=404, detail="Event not found")
-
-    if event.status != EventStatus.PUBLISHED:
-        raise HTTPException(status_code=400, detail="Event is not published")
-
-    client = EventsProviderClient()
     try:
-        ticket_id = await client.register(
+        ticket_id = await services.register_ticket(
+            db,
             event_id=req.event_id,
             first_name=req.first_name,
             last_name=req.last_name,
             email=req.email,
             seat=req.seat,
         )
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="Event not found")
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
-    ticket = Ticket(ticket_id=ticket_id, event_id=req.event_id)
-    db.add(ticket)
-    db.commit()
-
-    seats_cache.delete(f"seats_{req.event_id}")
 
     return TicketResponse(ticket_id=ticket_id)
 
@@ -282,18 +253,9 @@ async def register_ticket(req: RegisterRequest, db: Session = Depends(get_db)):
 async def cancel_ticket(ticket_id: str, db: Session = Depends(get_db)):
     await ensure_initialized()
 
-    ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
-    if not ticket:
+    try:
+        success = await services.cancel_ticket(db, ticket_id)
+    except NotFoundError:
         raise HTTPException(status_code=404, detail="Ticket not found")
-
-    client = EventsProviderClient()
-    success = await client.unregister(
-        event_id=str(ticket.event_id), ticket_id=ticket_id
-    )
-
-    db.delete(ticket)
-    db.commit()
-
-    seats_cache.delete(f"seats_{ticket.event_id}")
 
     return CancelResponse(success=success)
