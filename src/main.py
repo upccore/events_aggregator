@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from src import services
 from src.database import get_db, init_db
+from src.enums import EventStatus
 from src.services import BusinessLogicError, NotFoundError
 from src.sync import background_sync_worker, sync_events
 
@@ -80,7 +81,7 @@ class EventSchema(BaseModel):
     place: PlaceSchema
     event_time: datetime
     registration_deadline: datetime
-    status: str
+    status: EventStatus
     number_of_visitors: int
 
 
