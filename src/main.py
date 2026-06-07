@@ -2,6 +2,7 @@ import asyncio
 import logging
 from datetime import datetime
 
+import sentry_sdk
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
@@ -9,6 +10,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from src import services
+from src.config import GLITCHTIP_DSN
 from src.database import get_db, init_db
 from src.enums import EventStatus
 from src.outbox_worker import background_outbox_worker
@@ -39,6 +41,9 @@ class CustomRoute(APIRoute):
 
 app = FastAPI(title="Events Aggregator")
 app.router.route_class = CustomRoute
+
+if GLITCHTIP_DSN:
+    sentry_sdk.init(dsn=GLITCHTIP_DSN)
 
 _initialized = False
 _init_lock = asyncio.Lock()
