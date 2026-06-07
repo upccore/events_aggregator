@@ -1,10 +1,11 @@
+import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Column, DateTime, Integer, String, TypeDecorator
+from sqlalchemy import JSON, Column, DateTime, Integer, String, TypeDecorator
 from sqlalchemy.dialects.postgresql import UUID
 
 from src.database import Base
-from src.enums import EventStatus, SyncStatus
+from src.enums import EventStatus, OutboxStatus, SyncStatus
 
 
 class _EnumType(TypeDecorator):
@@ -66,3 +67,38 @@ class Ticket(Base):
 
     ticket_id = Column(UUID(as_uuid=True), primary_key=True)
     event_id = Column(UUID(as_uuid=True), nullable=False)
+
+
+class OutboxEvent(Base):
+    __tablename__ = "outbox_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    event_type = Column(String(100), nullable=False)
+    payload = Column(JSON, nullable=False)
+    status = Column(
+        _EnumType(OutboxStatus),
+        nullable=False,
+        default=OutboxStatus.PENDING,
+        index=True,
+    )
+    attempts = Column(Integer, default=0, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )
+
+
+class IdempotencyKey(Base):
+    __tablename__ = "idempotency_keys"
+
+    key = Column(String(255), primary_key=True)
+    ticket_id = Column(String, nullable=False)
+    event_id = Column(String, nullable=False)
+    seat = Column(String, nullable=False)
+    email = Column(String, nullable=False)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        nullable=False,
+    )

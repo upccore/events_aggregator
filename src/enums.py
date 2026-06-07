@@ -12,3 +12,8 @@ class SyncStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+
+
+class OutboxStatus(str, Enum):
+    PENDING = "pending"
+    SENT = "sent"

@@ -17,3 +17,14 @@ EVENTS_PROVIDER_URL = os.getenv(
     "EVENTS_PROVIDER_URL",
     "http://student-system-events-provider-web.student-system-events-provider.svc:8000",
 )
+
+CAPASHINO_URL = os.getenv(
+    "CAPASHINO_URL",
+    "http://student-system-capashino-web.student-system-capashino.svc:8000",
+)
+CAPASHINO_API_KEY = os.getenv("CAPASHINO_API_KEY", "")
+
+GLITCHTIP_DSN = os.getenv("GLITCHTIP_DSN", "")
+
+OUTBOX_WORKER_INTERVAL = int(os.getenv("OUTBOX_WORKER_INTERVAL", "10"))
+OUTBOX_MAX_RETRIES = int(os.getenv("OUTBOX_MAX_RETRIES", "5"))
