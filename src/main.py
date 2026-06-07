@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from src import services
 from src.database import get_db, init_db
 from src.enums import EventStatus
+from src.outbox_worker import background_outbox_worker
 from src.services import BusinessLogicError, NotFoundError
 from src.sync import background_sync_worker, sync_events
 
@@ -63,6 +64,12 @@ async def ensure_initialized():
             logger.info("Sync worker started")
         except Exception as e:
             logger.error("Sync worker start failed: %s", e)
+
+        try:
+            asyncio.create_task(background_outbox_worker())
+            logger.info("Outbox worker started")
+        except Exception as e:
+            logger.error("Outbox worker start failed: %s", e)
 
         _initialized = True
 

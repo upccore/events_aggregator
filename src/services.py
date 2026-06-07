@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from src.cache import seats_cache
 from src.enums import EventStatus
-from src.models import Event, Ticket
+from src.models import Event, OutboxEvent, Ticket
 from src.provider_client import EventsProviderClient
 
 
@@ -86,6 +86,16 @@ async def register_ticket(
 
     ticket = Ticket(ticket_id=ticket_id, event_id=event_id)
     db.add(ticket)
+
+    outbox_event = OutboxEvent(
+        event_type="ticket_purchased",
+        payload={
+            "message": f"Вы успешно зарегистрированы на мероприятие - {event.name}",
+            "reference_id": ticket_id,
+            "idempotency_key": ticket_id,
+        },
+    )
+    db.add(outbox_event)
     db.commit()
 
     seats_cache.delete(f"seats_{event_id}")
