@@ -12,7 +12,7 @@ from src import services
 from src.database import get_db, init_db
 from src.enums import EventStatus
 from src.outbox_worker import background_outbox_worker
-from src.services import BusinessLogicError, NotFoundError
+from src.services import BusinessLogicError, ConflictError, NotFoundError
 from src.sync import background_sync_worker, sync_events
 
 logging.basicConfig(level=logging.INFO)
@@ -120,6 +120,7 @@ class RegisterRequest(BaseModel):
     last_name: str
     email: str
     seat: str
+    idempotency_key: str | None = None
 
 
 class TicketResponse(BaseModel):
@@ -255,9 +256,12 @@ async def register_ticket(req: RegisterRequest, db: Session = Depends(get_db)):
             last_name=req.last_name,
             email=req.email,
             seat=req.seat,
+            idempotency_key=req.idempotency_key,
         )
     except NotFoundError:
         raise HTTPException(status_code=404, detail="Event not found")
+    except ConflictError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:

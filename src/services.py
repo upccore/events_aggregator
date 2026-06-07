@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from src.cache import seats_cache
 from src.enums import EventStatus
-from src.models import Event, OutboxEvent, Ticket
+from src.models import Event, IdempotencyKey, OutboxEvent, Ticket
 from src.provider_client import EventsProviderClient
 
 
@@ -13,6 +13,10 @@ class NotFoundError(Exception):
 
 
 class BusinessLogicError(Exception):
+    pass
+
+
+class ConflictError(Exception):
     pass
 
 
@@ -67,7 +71,23 @@ async def register_ticket(
     last_name: str,
     email: str,
     seat: str,
+    idempotency_key: str | None = None,
 ) -> str:
+    if idempotency_key:
+        existing = (
+            db.query(IdempotencyKey)
+            .filter(IdempotencyKey.key == idempotency_key)
+            .first()
+        )
+        if existing:
+            if (
+                existing.event_id != event_id
+                or existing.seat != seat
+                or existing.email != email
+            ):
+                raise ConflictError("Idempotency key already used with different data")
+            return existing.ticket_id
+
     event = db.query(Event).filter(Event.id == event_id).first()
     if not event:
         raise NotFoundError(f"Event {event_id} not found")
@@ -96,6 +116,18 @@ async def register_ticket(
         },
     )
     db.add(outbox_event)
+
+    if idempotency_key:
+        db.add(
+            IdempotencyKey(
+                key=idempotency_key,
+                ticket_id=ticket_id,
+                event_id=event_id,
+                seat=seat,
+                email=email,
+            )
+        )
+
     db.commit()
 
     seats_cache.delete(f"seats_{event_id}")
