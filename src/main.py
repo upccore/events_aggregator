@@ -173,14 +173,9 @@ async def get_events(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid date format")
 
-    total, events = services.get_events_list(db, date_from_dt, page, page_size)
-
-    next_url = None
-    if page * page_size < total:
-        params = f"page={page + 1}&page_size={page_size}"
-        if date_from:
-            params += f"&date_from={date_from}"
-        next_url = f"/api/events?{params}"
+    total, next_url, events = services.get_events_list(
+        db, date_from_dt, page, page_size, date_from
+    )
 
     results = [
         EventSchema(

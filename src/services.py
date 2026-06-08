@@ -25,7 +25,8 @@ def get_events_list(
     date_from_dt: datetime | None,
     page: int,
     page_size: int,
-) -> tuple[int, list[Event]]:
+    date_from: str | None = None,
+) -> tuple[int, str | None, list[Event]]:
     query = db.query(Event)
     if date_from_dt:
         query = query.filter(Event.event_time >= date_from_dt)
@@ -36,7 +37,13 @@ def get_events_list(
         .limit(page_size)
         .all()
     )
-    return total, events
+    next_url = None
+    if page * page_size < total:
+        params = f"page={page + 1}&page_size={page_size}"
+        if date_from:
+            params += f"&date_from={date_from}"
+        next_url = f"/api/events?{params}"
+    return total, next_url, events
 
 
 def get_event_by_id(db: Session, event_id: str) -> Event:
