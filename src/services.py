@@ -53,7 +53,11 @@ def get_event_by_id(db: Session, event_id: str) -> Event:
     return event
 
 
-async def get_event_seats(db: Session, event_id: str) -> list[str]:
+async def get_event_seats(
+    db: Session,
+    event_id: str,
+    client: EventsProviderClient | None = None,
+) -> list[str]:
     cached = seats_cache.get(f"seats_{event_id}")
     if cached:
         return cached
@@ -65,7 +69,8 @@ async def get_event_seats(db: Session, event_id: str) -> list[str]:
     if event.status != EventStatus.PUBLISHED:
         raise BusinessLogicError("Event is not published")
 
-    client = EventsProviderClient()
+    if client is None:
+        client = EventsProviderClient()
     seats = await client.get_seats(event_id)
     seats_cache.set(f"seats_{event_id}", seats, ttl_seconds=30)
     return seats
@@ -79,6 +84,7 @@ async def register_ticket(
     email: str,
     seat: str,
     idempotency_key: str | None = None,
+    client: EventsProviderClient | None = None,
 ) -> str:
     if idempotency_key:
         existing = (
@@ -102,7 +108,8 @@ async def register_ticket(
     if event.status != EventStatus.PUBLISHED:
         raise BusinessLogicError("Event is not published")
 
-    client = EventsProviderClient()
+    if client is None:
+        client = EventsProviderClient()
     ticket_id = await client.register(
         event_id=event_id,
         first_name=first_name,
@@ -142,12 +149,17 @@ async def register_ticket(
     return ticket_id
 
 
-async def cancel_ticket(db: Session, ticket_id: str) -> bool:
+async def cancel_ticket(
+    db: Session,
+    ticket_id: str,
+    client: EventsProviderClient | None = None,
+) -> bool:
     ticket = db.query(Ticket).filter(Ticket.ticket_id == ticket_id).first()
     if not ticket:
         raise NotFoundError(f"Ticket {ticket_id} not found")
 
-    client = EventsProviderClient()
+    if client is None:
+        client = EventsProviderClient()
     success = await client.unregister(
         event_id=str(ticket.event_id), ticket_id=ticket_id
     )
