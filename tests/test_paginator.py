@@ -43,8 +43,12 @@ async def test_empty_results():
 @pytest.mark.asyncio
 async def test_reusable_iterator():
     client = AsyncMock()
-    client.get_events.return_value = {"results": [make_event(1)], "next": None}
+    client.get_events.side_effect = [
+        {"results": [make_event(1)], "next": None},
+        {"results": [make_event(1)], "next": None},
+    ]
     paginator = EventsPaginator(client)
     first = [e async for e in paginator]
     second = [e async for e in paginator]
     assert first == second
+    assert client.get_events.call_count == 2
