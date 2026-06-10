@@ -10,7 +10,7 @@ from src.models import OutboxEvent
 logger = logging.getLogger(__name__)
 
 
-async def process_outbox():
+async def process_outbox(client: CapashinoClient | None = None):
     db = SessionLocal()
     try:
         pending = (
@@ -22,7 +22,8 @@ async def process_outbox():
             .all()
         )
 
-        client = CapashinoClient()
+        if client is None:
+            client = CapashinoClient()
 
         for event in pending:
             try:
