@@ -109,6 +109,7 @@ class EventSchema(BaseModel):
         try:
             return EventStatus(v)
         except ValueError:
+            logger.warning("Unknown event status %r, falling back to PUBLISHED", v)
             return EventStatus.PUBLISHED
 
 
