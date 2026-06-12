@@ -175,6 +175,7 @@ class CancelResponse(BaseModel):
 
 @app.get("/metrics")
 async def metrics(db: Session = Depends(get_db)):
+    await ensure_initialized()
     events_total.set(db.query(Event).count())
     tickets_created_total.set(db.query(Ticket).count())
     tickets_cancelled_total.set(
