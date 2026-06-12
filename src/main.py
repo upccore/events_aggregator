@@ -1,20 +1,31 @@
 import asyncio
 import logging
+import time
 from datetime import datetime
 
 import sentry_sdk
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
+from prometheus_client import REGISTRY, generate_latest
 from pydantic import BaseModel, field_validator
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from sqlalchemy.orm import Session
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from src import services
 from src.config import GLITCHTIP_DSN
 from src.database import get_db, init_db
 from src.enums import EventStatus
+from src.metrics import (
+    events_total,
+    http_request_duration_seconds,
+    http_requests_total,
+    tickets_cancelled_total,
+    tickets_created_total,
+)
+from src.models import Event, Ticket
 from src.outbox_worker import background_outbox_worker
 from src.services import BusinessLogicError, ConflictError, NotFoundError
 from src.sync import background_sync_worker, sync_events
@@ -43,6 +54,26 @@ class CustomRoute(APIRoute):
 
 app = FastAPI(title="Events Aggregator")
 app.router.route_class = CustomRoute
+
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start_time = time.monotonic()
+        response = await call_next(request)
+        duration = time.monotonic() - start_time
+        http_requests_total.labels(
+            method=request.method,
+            endpoint=request.url.path,
+            status=response.status_code,
+        ).inc()
+        http_request_duration_seconds.labels(
+            method=request.method,
+            endpoint=request.url.path,
+        ).observe(duration)
+        return response
+
+
+app.add_middleware(MetricsMiddleware)
 
 if GLITCHTIP_DSN:
     sentry_sdk.init(
@@ -140,6 +171,16 @@ class TicketResponse(BaseModel):
 
 class CancelResponse(BaseModel):
     success: bool
+
+
+@app.get("/metrics")
+async def metrics(db: Session = Depends(get_db)):
+    events_total.set(db.query(Event).count())
+    tickets_created_total.set(db.query(Ticket).count())
+    tickets_cancelled_total.set(
+        db.query(Ticket).filter(Ticket.status == "cancelled").count()
+    )
+    return Response(content=generate_latest(REGISTRY), media_type="text/plain")
 
 
 @app.get("/api/health")
