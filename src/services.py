@@ -166,7 +166,7 @@ async def cancel_ticket(
 
     seats_cache.delete(f"seats_{ticket.event_id}")
 
-    db.delete(ticket)
+    ticket.status = "cancelled"
     db.commit()
 
     return success

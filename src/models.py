@@ -67,6 +67,7 @@ class Ticket(Base):
 
     ticket_id = Column(UUID(as_uuid=True), primary_key=True)
     event_id = Column(UUID(as_uuid=True), nullable=False)
+    status = Column(String(20), nullable=False, default="active")
 
 
 class OutboxEvent(Base):
