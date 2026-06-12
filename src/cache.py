@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 
+from src.metrics import cache_hits_total, cache_misses_total
+
 
 class SimpleCache:
     def __init__(self):
@@ -9,8 +11,10 @@ class SimpleCache:
         if key in self._cache:
             value, expiry = self._cache[key]
             if datetime.now() < expiry:
+                cache_hits_total.inc()
                 return value
             del self._cache[key]
+        cache_misses_total.inc()
         return None
 
     def set(self, key: str, value, ttl_seconds: int = 30):
